@@ -49,9 +49,10 @@ public class MainActivity extends AppCompatActivity {
         Log.v("module", module.toString());
         try {
             for (String name : Objects.requireNonNull(getAssets().list("cropped_faces"))) {
-                Bitmap bitmap = BitmapFactory.decodeStream(getAssets().open("cropped_faces/"+name));
+                Bitmap bitmap = BitmapFactory.decodeStream(getAssets().open("cropped_faces/" + name));
 
-                Tensor inputTensor = TensorImageUtils.bitmapToFloat32Tensor(bitmap,TensorImageUtils.TORCHVISION_NORM_MEAN_RGB, TensorImageUtils.TORCHVISION_NORM_STD_RGB);
+                Tensor inputTensor = TensorImageUtils.bitmapToFloat32Tensor(bitmap, new float[]{0.5f, 0.5f, 0.5f}
+                        , new float[]{0.5f, 0.5f, 0.5f}, MemoryFormat.CHANNELS_LAST);
 
                 Log.v("inputTensor", inputTensor.toString());
                 IValue value = module.forward(IValue.from(inputTensor));
@@ -59,9 +60,9 @@ public class MainActivity extends AppCompatActivity {
                 Log.v("value", value.toString());
                 float[] array1 = tensors[0].toTensor().getDataAsFloatArray();
 
-                Bitmap outBitmap = bitmapFromRGBImageAsFloatArray(array1, 512, 512);
+                Bitmap outBitmap = floatArrayToBitmap(array1, 512, 512);
                 Log.v("output", outBitmap.toString());
-                saveBitmapToFile(outBitmap,name);
+                saveBitmapToFile(outBitmap, name);
             }
         } catch (IOException e) {
             e.printStackTrace();
@@ -70,8 +71,8 @@ public class MainActivity extends AppCompatActivity {
 
     }
 
-    private void saveBitmapToFile(Bitmap bitmap,String name) throws IOException {
-        File f = new File(Objects.requireNonNull(getExternalCacheDir()).getAbsolutePath() + "/"+name);
+    private void saveBitmapToFile(Bitmap bitmap, String name) throws IOException {
+        File f = new File(Objects.requireNonNull(getExternalCacheDir()).getAbsolutePath() + "/" + name);
         f.createNewFile();
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
         bitmap.compress(Bitmap.CompressFormat.PNG, 0 /*ignored for PNG*/, bos);
@@ -83,41 +84,40 @@ public class MainActivity extends AppCompatActivity {
         fos.close();
     }
 
-    public static Bitmap bitmapFromRGBImageAsFloatArray(float[] data, int width, int height) {
+    private Bitmap floatArrayToBitmap(float[] floatArray, int width, int height) {
 
+        // Create empty bitmap in RGBA format
         Bitmap bmp = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+        int[] pixels = new int[width * height * 4];
 
-        float max = 0;
-        float min = 999999;
-
-        for (float f : data) {
-            if (f > max) {
-                max = f;
+        // mapping smallest value to 0 and largest value to 255
+        float maxValue = 1.0f;
+        float minValue = -1.0f;
+        for (float value : floatArray) {
+            if (value > maxValue) {
+                maxValue = value;
             }
-            if (f < min) {
-                min = f;
+            if(value < minValue){
+                minValue = value;
             }
         }
+        float delta = maxValue - minValue;
 
-        int delta = (int) (max - min);
-
-        for (int i = 0; i < width * height; i++) {
-
-
-            int r = (int) ((data[i] - min) / delta * 255.0f);
-            int g = (int) ((data[i + width * height] - min) / delta * 255.0f);
-            int b = (int) ((data[i + width * height * 2] - min) / delta * 255.0f);
-
-            int x = i / width;
-            int y = i % width;
-
-            int color = Color.rgb(r, g, b);
-            bmp.setPixel(x, y, color);
-
+        // copy each value from float array to RGB channels and set alpha channel
+        for (int i = 0; i < width * height; i++){
+            int r = conversion(minValue,delta,floatArray[i]);
+            int g = conversion(minValue,delta,floatArray[i + width * height]);
+            int b = conversion(minValue,delta,floatArray[i + 2 * width * height]);
+            pixels[i] =Color.rgb(r, g, b);
         }
+        bmp.setPixels(pixels, 0, width, 0, 0, width, height);
+
         return bmp;
     }
 
+    private int conversion(float minValue,float delta,float data){
+        return (int)((data - minValue) / delta * 255.0f);
+    }
     private void copyAssets() {
         AssetManager assetManager = getAssets();
 
