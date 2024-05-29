@@ -38,35 +38,37 @@ public class MainActivity extends AppCompatActivity {
         EdgeToEdge.enable(this);
         setContentView(R.layout.activity_main);
 
-
-        File file = new File(getFilesDir().getAbsolutePath() + "/codeformer.ptl");
-        if (!file.exists()) {
-            Log.v("codeformer model", "not exist");
-            copyAssets();
-        }
-        Module module = LiteModuleLoader.load(getFilesDir().getAbsolutePath() + "/codeformer.ptl");
-
-        Log.v("module", module.toString());
-        try {
-            for (String name : Objects.requireNonNull(getAssets().list("cropped_faces"))) {
-                Bitmap bitmap = BitmapFactory.decodeStream(getAssets().open("cropped_faces/" + name));
-
-                Tensor inputTensor = TensorImageUtils.bitmapToFloat32Tensor(bitmap, new float[]{0.5f, 0.5f, 0.5f}
-                        , new float[]{0.5f, 0.5f, 0.5f}, MemoryFormat.CHANNELS_LAST);
-
-                Log.v("inputTensor", inputTensor.toString());
-                IValue value = module.forward(IValue.from(inputTensor));
-                IValue[] tensors = value.toTuple();
-                Log.v("value", value.toString());
-                float[] array1 = tensors[0].toTensor().getDataAsFloatArray();
-
-                Bitmap outBitmap = floatArrayToBitmap(array1, 512, 512);
-                Log.v("output", outBitmap.toString());
-                saveBitmapToFile(outBitmap, name);
+        new Thread(()->{
+            File file = new File(getFilesDir().getAbsolutePath() + "/codeformer.ptl");
+            if (!file.exists()) {
+                Log.v("codeformer model", "not exist");
+                copyAssets();
             }
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+            Module module = LiteModuleLoader.load(getFilesDir().getAbsolutePath() + "/codeformer.ptl");
+
+            Log.v("module", module.toString());
+            try {
+                for (String name : Objects.requireNonNull(getAssets().list("cropped_faces"))) {
+                    Bitmap bitmap = BitmapFactory.decodeStream(getAssets().open("cropped_faces/" + name));
+
+                    Tensor inputTensor = TensorImageUtils.bitmapToFloat32Tensor(bitmap, new float[]{0.5f, 0.5f, 0.5f}
+                            , new float[]{0.5f, 0.5f, 0.5f}, MemoryFormat.CHANNELS_LAST);
+
+                    Log.v("inputTensor", inputTensor.toString());
+                    IValue value = module.forward(IValue.from(inputTensor));
+                    IValue[] tensors = value.toTuple();
+                    Log.v("value", value.toString());
+                    float[] array1 = tensors[0].toTensor().getDataAsFloatArray();
+
+                    Bitmap outBitmap = floatArrayToBitmap(array1, 512, 512);
+                    Log.v("output", outBitmap.toString());
+                    saveBitmapToFile(outBitmap, name);
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }).start();
+
 
 
     }
